@@ -92,11 +92,6 @@ static const char* conrolCharExpandTextList[] = {
 
 #define LOGX_RINGBUF_LEN 5000
 
-static bool enabled;
-static uint8_t logxRingBuf[LOGX_RINGBUF_LEN];
-static uint32_t readPos = 0;
-static uint32_t writePos = 0;
-static uint8_t ringBufSts = DATA_BUF_EMPTY;
 
 /*--------------------------------------------------
 		Function definition
@@ -104,21 +99,11 @@ static uint8_t ringBufSts = DATA_BUF_EMPTY;
 
 void logx_init(void)
 {
-	enabled = true;
 	log_level = LOG_ERR;
 	log_out_destination = LOGX_DEST_SYSLOG;
 	log_dump_format = LOGX_FMT_NONE;
 }
 
-void logx_enable(void)
-{
-	enabled = true;
-}
-
-void logx_disable(void)
-{
-	enabled = false;
-}
 
 void logx_set_level(uint8_t level)
 {
@@ -133,11 +118,6 @@ void logx_set_dump_format(uint8_t format)
 void logx_set_out_destination(uint8_t dest)
 {
 	log_out_destination = dest;
-}
-
-uint8_t logx_get_level(void)
-{
-	return log_level;
 }
 
 uint8_t logx_get_dump_format(void)
@@ -178,9 +158,6 @@ void logx_set_tag(const char* tag)
 
 void _logx_data(uint8_t level, const char* tag, const uint8_t * data, uint32_t len)
 {
-
-	if(!enabled) return;
-
 	if(len == 0) return;
 
 
@@ -236,9 +213,6 @@ void _logx_format(uint8_t level, const char* tag, const char *format, ...)
 {
 /* Please use the foramt: printf("%s", "This is the print string."); */
 #define MAX_FORMAT_STRING_LEN 256
-
-	if(!enabled) return;
-
 	if(level > log_level) return;
 
 	if(log_out_destination >= LOGX_DEST_ENVALID) return;
@@ -281,6 +255,8 @@ void formatData(const uint8_t* in, uint32_t inLen, uint8_t* out, uint32_t outMax
 
 	writeOffset = 0;
 	fmt = log_dump_format;
+
+	if(outMaxLen == 0) return;
 
 	for(i=0;i<inLen;i++)
 	{
@@ -442,10 +418,6 @@ void output_format(uint8_t level, const char* tag, const char* format, va_list a
 	{
 		vsyslog(level, format, args_list);
 	}
-	else if(dest == LOGX_DEST_RINGBUF)
-	{
-
-	}
 	else
 	{
 		/* Nothing to do */
@@ -485,113 +457,12 @@ void output_data_line(uint8_t level, const char* tag, const uint8_t* data, uint3
 	{
 		syslog(level, "%s", (char*)data);
 	}
-	else if(dest == LOGX_DEST_RINGBUF)
-	{
-		output_line_ringbuf(data, len);
-	}
 	else
 	{
 		/* Nothing to do */
 	}
 
 }
-
-void output_line_ringbuf(const uint8_t* data, uint32_t len)
-{
-	/* Add a line feed. */
-	len++;
-
-	if(len >= LOGX_RINGBUF_LEN)
-	{
-		return;
-	}
-
-	if(ringBufSts == DATA_BUF_EMPTY)
-	{
-		ringBufSts = DATA_BUF_HAS_DATA;
-	}
-	/* Put the data into the data buffer */
-	if(writePos + len >= LOGX_RINGBUF_LEN)
-	{
-		memcpy(&logxRingBuf[writePos], data, LOGX_RINGBUF_LEN - writePos);
-		memcpy(&logxRingBuf[0], &data[LOGX_RINGBUF_LEN - writePos], len - 1 - (LOGX_RINGBUF_LEN - writePos));
-		logxRingBuf[len - 1 - (LOGX_RINGBUF_LEN - writePos)] = '\n';
-		writePos = len - (LOGX_RINGBUF_LEN - writePos);
-		ringBufSts = DATA_BUF_FULL;
-	}
-	else
-	{
-		memcpy(&logxRingBuf[writePos], data, len-1);
-		logxRingBuf[writePos+len-1] = '\n';
-		writePos += len;
-	}
-
-	if(ringBufSts == DATA_BUF_FULL)
-	{
-		readPos = writePos;
-	}
-}
-
-
-void logx_flush_ringbuffer(void)
-{
-	int32_t outputLen;
-	int32_t starPos;
-	int32_t lineLength;
-	int32_t linePos = 0;
-
-	/* Use the highest priority level 0 and SLOW_LOG_TAG to output. */
-	if(ringBufSts == DATA_BUF_EMPTY) return;
-
-	lineLength = LOG_LINE_LENGTH;
-
-	if(ringBufSts == DATA_BUF_FULL)
-	{
-		outputLen = LOGX_RINGBUF_LEN-readPos;
-		starPos = readPos;
-		linePos = 0;
-		while(outputLen>lineLength)
-		{
-			printf("%.*s", lineLength, &logxRingBuf[starPos+linePos]);
-			outputLen -= lineLength;
-			linePos += lineLength;
-		}
-
-		printf("%.*s", outputLen, &logxRingBuf[starPos+linePos]);
-
-		outputLen = writePos;
-		starPos = 0;
-		linePos = 0;
-		while(outputLen>lineLength)
-		{
-			printf("%.*s", lineLength, &logxRingBuf[starPos+linePos]);
-			outputLen -= lineLength;
-			linePos += lineLength;
-		}
-
-		printf("%.*s", outputLen, &logxRingBuf[starPos+linePos]);
-	}
-	else
-	{
-		outputLen = writePos;
-		starPos = readPos;
-		linePos = 0;
-		while(outputLen>lineLength)
-		{
-			printf("%.*s", lineLength, &logxRingBuf[starPos+linePos]);
-			outputLen -= lineLength;
-			linePos += lineLength;
-		}
-		printf("%.*s", outputLen, &logxRingBuf[starPos+linePos]);
-	}
-
-	ringBufSts = DATA_BUF_EMPTY;
-	readPos = 0;
-	writePos = 0;
-
-}
-
-
 
 // little endian
 void shrinkN2MBytes(const char* src, char* dest, uint32_t elementSize, uint32_t n, uint32_t m)

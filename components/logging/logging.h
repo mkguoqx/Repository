@@ -6,11 +6,9 @@
 		           Definition
 --------------------------------------------------*/
 
-#define noop ((void)0)
 
-
-/* Log level definition */
-#ifndef LOG_EMERG
+/* Log level definition for syslog */
+#if 0
 #define LOG_EMERG          0       /* system is unusable */
 #define LOG_ALERT          1       /* action must be taken immediately */
 #define LOG_CRIT           2       /* critical conditions */
@@ -26,14 +24,12 @@
 enum {
 	LOGX_DEST_STDOUT,
 	LOGX_DEST_SYSLOG,
-	LOGX_DEST_RINGBUF,	/* RingBuffer will output to stdout default. And it will not be thread safe. */
 	LOGX_DEST_ENVALID,
-
 };
 
 
 
-/* Log format */
+/* Log format for binary data */
 enum {
 	LOGX_FMT_NONE,
 	LOGX_FMT_HEX,
@@ -57,17 +53,14 @@ void _logx_format(uint8_t level, const char* tag, const char *format, ...);
 
 
 void logx_init(void);
-void logx_enable(void);
-void logx_disable(void);
 void logx_set_level(uint8_t level);
 void logx_set_dump_format(uint8_t format);
 void logx_set_out_destination(uint8_t dest);
-uint8_t logx_get_level(void);
 uint8_t logx_get_dump_format(void);
 uint8_t logx_get_out_destination(void);
 
 void logx_set_tag(const char* tag);
-void logx_flush_ringbuffer(void);
+
 
 /* User interface mapping */
 #define logx_specail(level, tag, format, ...)  logx_format(level, tag, format, ## __VA_ARGS__)
